@@ -1,15 +1,15 @@
 # Kirill Galkin, https://github.com/galkinc/
 # Script for CloudFormation
-#
+# 
 # CloudFront, CodeCommit, CodePipeline, CodeBuild, S3 
 # npm building
 # 
 # Used following s3 buckets names:
-# PipelineBucket: the temp bucket for storing build artefacts,
-# testFrontDeployment: deployment target.
+# testAdminPipelineBucket: the temp bucket for storing build artefacts,
+# testAdminFrontDeployment: deployment target.
 # 
 # Used following CodePipeline names:
-# codecommit-events-pipeline
+# codecommit-test-admin-events-pipeline
 #
 AWSTemplateFormatVersion: 2010-09-09
 Parameters: 
@@ -20,7 +20,7 @@ Parameters:
   RepositoryName:
     Type: String
     Default: front-end
-    Description: "CodeCommit repository name"
+    Description: "CodeComit repository name"
   #ApplicationName
     #Type: String
     #Default: appname_frontend
@@ -42,11 +42,11 @@ Parameters:
 
 Resources:
   #Temp bucket for storing build artefacts
-  PipelineBucket: 
+  testAdminPipelineBucket: 
     Type: 'AWS::S3::Bucket'
     Properties: {}
   #Target for deployment
-  testFrontDeployment: 
+  testAdminFrontDeployment: 
     Type: 'AWS::S3::Bucket'
     Properties:
       WebsiteConfiguration:
@@ -122,12 +122,12 @@ Resources:
   CodePipeline:
     Type: 'AWS::CodePipeline::Pipeline'
     Properties:
-      Name: codecommit-events-pipeline
+      Name: codecommit-test-admin-events-pipeline
       RoleArn: !GetAtt 
         - CodePipeLineRole
         - Arn
       ArtifactStore:
-        Location: !Ref PipelineBucket
+        Location: !Ref testAdminPipelineBucket
         Type: S3
       Stages:
         - 
@@ -242,8 +242,8 @@ Resources:
       DistributionConfig:
         Origins:
           - 
-            DomainName: !GetAtt testFrontDeployment.DomainName
-            Id: !Ref testFrontDeployment
+            DomainName: !GetAtt testAdminFrontDeployment.DomainName
+            Id: !Ref testAdminFrontDeployment
             S3OriginConfig:
               OriginAccessIdentity: ''
         DefaultRootObject: index.html
@@ -253,7 +253,7 @@ Resources:
           MaxTTL: 31536000
           ForwardedValues: 
             QueryString: true
-          TargetOriginId: !Ref testFrontDeployment
+          TargetOriginId: !Ref testAdminFrontDeployment
           ViewerProtocolPolicy: "redirect-to-https"
   CodeBuildRole:
     Type: AWS::IAM::Role
@@ -282,8 +282,8 @@ Resources:
                   - "s3:GetBucketVersioning"
                   - "s3:PutObject"
                 Resource: 
-                  - !GetAtt PipelineBucket.Arn
-                  - !Join ['', [!GetAtt PipelineBucket.Arn, "/*"]]
+                  - !GetAtt testAdminPipelineBucket.Arn
+                  - !Join ['', [!GetAtt testAdminPipelineBucket.Arn, "/*"]]
               - 
                 Effect: Allow
                 Action:
@@ -293,8 +293,8 @@ Resources:
                   - "s3:PutObject"
                   - "s3:PutObjectAcl"
                 Resource: 
-                  - !GetAtt testFrontDeployment.Arn
-                  - !Join ['', [!GetAtt testFrontDeployment.Arn, "/*"]]
+                  - !GetAtt testAdminFrontDeployment.Arn
+                  - !Join ['', [!GetAtt testAdminFrontDeployment.Arn, "/*"]]
               -
                 Effect: Allow
                 Action:
@@ -333,9 +333,9 @@ Resources:
                 - npm run build
             post_build:
               commands:
-                - aws s3 cp --recursive --acl public-read ./build s3://${testFrontDeployment}/ 
-                - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${testFrontDeployment}/
-                - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${testFrontDeployment}/
+                - aws s3 cp --recursive --acl public-read ./build s3://${testAdminFrontDeployment}/ 
+                - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${testAdminFrontDeployment}/
+                - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${testAdminFrontDeployment}/
                 - aws cloudfront create-invalidation --distribution-id ${Distribution} --paths /index.html /service-worker.js
           artifacts:
             files:
