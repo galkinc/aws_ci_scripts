@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'State: Infrastructure for the manual deployment of web content to S3 bucket and CloudFront (blog.galkinc.ru)'
+Parameters:
+  BucketName:
+    Description: 'Optional name of the bucket. Bucket name should not contain uppercase characters.'
+    Type: String
+    Default: ''
+Conditions:
+  HasBucketName: !Not [!Equals [!Ref BucketName, '']]
+Resources:
+  Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !If [HasBucketName, !Ref BucketName, !Ref 'AWS::NoValue']
+      WebsiteConfiguration:
+        IndexDocument: index.html
+  Distribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Origins:
+          - 
+            DomainName: !GetAtt Bucket.DomainName
+            Id: !Ref Bucket
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: 'http2'
+        # Configure the caching behavior for our CDN
+        DefaultCacheBehavior: 
+          MinTTL: 86400  # 1 day
+          MaxTTL: 31536000  # 1 year
+          ForwardedValues: 
+            QueryString: true
+          TargetOriginId: !Ref Bucket
+          ViewerProtocolPolicy: "redirect-to-https"
+        # FIX: if I refreshed the page or linked directly to the page, it came up as "Access Denied," status 403
+        CustomErrorResponse:
+        - ErrorCode: '403'
+          ResponsePagePath: "/index.html"
+          ResponseCode: '200'
+          ErrorCachingMinTTL: '300'
+        - ErrorCode: '404'
+          ResponsePagePath: "/index.html"
+          ResponseCode: '200'
+          ErrorCachingMinTTL: '300'
+  BucketPolicyPublic:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Statement:
+        - Principal: '*'
+          Action: 's3:GetObject'
+          Effect: Allow
+          Resource: !Sub '${Bucket.Arn}/*'
+Outputs:
+  BucketName:
+    Description: 'Name of the bucket'
+    Value: !Ref Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+  BucketDomainName:
+    Description: 'Domain name of the bucket.'
+    Value: !GetAtt 'Bucket.DomainName'
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketDomainName'
+  CloudFrontName:
+    Description: 'Name of the Domain Name of the Distribution.'
+    Value: !Ref Distribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontName'
+  CloudFrontDomainName:
+    Description: 'Domain Name of the CloudFront Distribution.'
+    Value: !GetAtt 'Distribution.DomainName'
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
